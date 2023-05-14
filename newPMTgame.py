@@ -21,7 +21,7 @@ def getIDs(fileName: str) -> np.ndarray:
 	surveyCodes = df['Answer.surveycode']
 	return surveyCodes.to_numpy()
 
-def getDataHelper(ids: np.ndarray, db) -> pd.DataFrame:
+def getDataHelper(url: str, db) -> pd.DataFrame:
 	'''
 	Returns a Pandas DataFrame object with the game data for given participant UUIDs
 
@@ -34,8 +34,10 @@ def getDataHelper(ids: np.ndarray, db) -> pd.DataFrame:
 	data = list(db.simulationresults.aggregate([
 		{
 			'$match': {
-				'uuid': {
-					'$in': list(ids)
+				'playedOn': url,
+				'createdAt': {
+					'$gte': datetime(2023, 4, 25, 0, 0, 0, 0),
+					'$lt': datetime(2023, 4, 28, 0, 0, 0, 0),
 				}
 			},
 		}, {
@@ -55,9 +57,11 @@ def getDataHelper(ids: np.ndarray, db) -> pd.DataFrame:
 		}
 	]))
 
+	print(f'Number of participants: {len(data)}')
+
 	# constants
 	TOTALCELLS = 54801
-	INTERVALS = 6
+	INTERVALS = 7
 
 	dataObj = OrderedDict()
 
@@ -76,11 +80,11 @@ def getDataHelper(ids: np.ndarray, db) -> pd.DataFrame:
 
 	# decisions and other per-round stats
 	for i in range(INTERVALS):
-		dataObj[f'addedTo{i}'] = []
+		dataObj[f'decisions{i}'] = []
 		dataObj[f'timeTaken{i}'] = []
-		dataObj[f'goldTargetsCollected{i}'] = []
+		dataObj[f'humanGoldTargetsCollected{i}'] = []
 		dataObj[f'performanceRating{i}'] = []
-		dataObj[f'selfishnessRating{i}'] = []
+		dataObj[f'honestlyMoralityRating{i}'] = []
 		dataObj[f'influenceText{i}'] = []
 
 	# end game survey stats
@@ -152,19 +156,28 @@ def getDataHelper(ids: np.ndarray, db) -> pd.DataFrame:
 
 		if participantData['decisions']['agent1']:
 			for j, stepObj in enumerate(participantData['decisions']['agent1']):
-				dataObj[f'addedTo{j}'].append(stepObj['addedTo'])
+				surveyRes = {'performanceRating': '', 'honestlyMoralityRating': '', 'influenceText': ''}
+				for obj in stepObj['surveyResponse']:
+					if obj['name'] == 'performanceRating':
+						surveyRes['performanceRating'] = obj['value']
+					elif obj['name'] == 'honestlyMoralityRating':
+						surveyRes['honestlyMoralityRating'] = obj['value']
+					elif obj['name'] == 'influenceText':
+						surveyRes['influenceText'] = obj['value']
+
+				dataObj[f'decisions{j}'].append(stepObj['decision'])
 				dataObj[f'timeTaken{j}'].append(stepObj['timeTaken'])
-				dataObj[f'goldTargetsCollected{j}'].append(stepObj['humanGoldTargetsCollected'])
-				dataObj[f'performanceRating{j}'].append(stepObj['surveyResponse'][0]['value'])
-				dataObj[f'selfishnessRating{j}'].append(stepObj['surveyResponse'][1]['value'])
-				dataObj[f'influenceText{j}'].append(stepObj['surveyResponse'][2]['value'])
+				dataObj[f'humanGoldTargetsCollected{j}'].append(stepObj['humanGoldTargetsCollected'])
+				dataObj[f'performanceRating{j}'].append(surveyRes['performanceRating'])
+				dataObj[f'honestlyMoralityRating{j}'].append(surveyRes['honestlyMoralityRating'])
+				dataObj[f'influenceText{j}'].append(surveyRes['influenceText'])
 		else:
 			for j in range(INTERVALS):
-				dataObj[f'addedTo{j}'].append('')
+				dataObj[f'decisions{j}'].append('')
 				dataObj[f'timeTaken{j}'].append('')
-				dataObj[f'goldTargetsCollected{j}'].append('')
+				dataObj[f'humanGoldTargetsCollected{j}'].append('')
 				dataObj[f'performanceRating{j}'].append('')
-				dataObj[f'selfishnessRating{j}'].append('')
+				dataObj[f'honestlyMoralityRating{j}'].append('')
 				dataObj[f'influenceText{j}'].append('')
 
 		if len(participantData['endGame']) > 0:
@@ -238,6 +251,9 @@ def getDataHelper(ids: np.ndarray, db) -> pd.DataFrame:
 
 	return pd.DataFrame(data=dataObj)
 
+def getProlificIDs():
+	pass
+
 def main():
 	# connect to DB
 	load_dotenv(verbose=True)
@@ -245,12 +261,9 @@ def main():
 	client = MongoClient(MONGO_URI)
 	db = client.tempDB
 
-	for file in os.listdir('batches/input'):
-		# ids is a numpy array holding all uuids in the current batch file
-		ids = getIDs(f'batches/input/{file}')
-
-		res = getDataHelper(ids, db)
-		res.to_csv(f'batches/output/Data_for_{file}')
+	url = "arlstrong-uml-034-prolific.herokuapp.com"
+	res = getDataHelper(url, db)
+	res.to_csv(f'batches/output/Data_for_PTV_2.csv')
 
 	print('Completed generating csv files.')
 
