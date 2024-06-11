@@ -21,7 +21,7 @@ def getIDs(fileName: str) -> np.ndarray:
 	surveyCodes = df['Answer.surveycode']
 	return surveyCodes.to_numpy()
 
-def getDataHelper(url: str, db) -> pd.DataFrame:
+def getDataHelper(url: str, ids, db) -> pd.DataFrame:
 	'''
 	Returns a Pandas DataFrame object with the game data for given participant UUIDs
 
@@ -35,9 +35,12 @@ def getDataHelper(url: str, db) -> pd.DataFrame:
 		{
 			'$match': {
 				'playedOn': url,
-				'createdAt': {
-					'$gte': datetime(2024, 5, 15, 20, 0, 0, 0),
-					'$lt': datetime(2024, 5, 17, 0, 0, 0, 0),
+				# 'createdAt': {
+				# 	'$gte': datetime(2024, 5, 15, 20, 0, 0, 0),
+				# 	'$lt': datetime(2024, 5, 17, 0, 0, 0, 0),
+				# }
+				'uuid': {
+					'$in': list(ids)
 				}
 			},
 		}, {
@@ -275,8 +278,10 @@ def main():
 	client = MongoClient(MONGO_URI)
 	db = client.physiologicalDB
 
+	list_of_ids = []
+
 	url = "arlstrong-uml-physiotest-8ead646049ca.herokuapp.com"
-	res = getDataHelper(url, db)
+	res = getDataHelper(url, list_of_ids, db)
 	res.to_csv(f'batches/output/Data_for_physiological.csv')
 
 	print('Completed generating csv files.')
